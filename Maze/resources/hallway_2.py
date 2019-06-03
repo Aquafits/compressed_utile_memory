@@ -1,4 +1,4 @@
-from Usm import Maze
+from maze.Maze import Maze
 
 walls = [
     [1, 1], [1, 2], [1, 4], [1, 5],
@@ -34,4 +34,4 @@ actions = [
     'south'
 ]
 
-hallway_2 = Maze(walls, treasures, snake_pits, 5, 7, observations, actions)
+hallway_2 = Maze(walls, treasures, snake_pits, 5, 7, observations, actions, default_reward=-1, treasure_reward=20)

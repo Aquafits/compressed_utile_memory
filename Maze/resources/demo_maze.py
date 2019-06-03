@@ -1,4 +1,4 @@
-from Usm import Maze
+from maze.Maze import Maze
 
 walls = [
     [1, 2],

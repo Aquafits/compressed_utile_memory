@@ -1,34 +1,7 @@
 from enum import Enum
 from typing import List
-
-
-class Maze:
-    def __init__(self,
-                 walls,
-                 treasures,
-                 snake_pits,
-                 y_size,
-                 x_size,
-                 observations,
-                 actions,
-                 snake_penalty=-40,
-                 treasure_reward=60,
-                 default_reward=0):
-        # 墙壁、宝藏（奖励点）、蛇坑（惩罚点）和迷宫大小
-        self.walls = walls
-        self.treasures = treasures
-        self.snake_pits = snake_pits
-        self.y_size = y_size
-        self.x_size = x_size
-
-        # 观察列表和动作列表
-        self.observations: List[str] = observations
-        self.actions: List[str] = actions
-
-        # 惩罚值，奖励值和折扣因子
-        self.snake_penalty = snake_penalty
-        self.treasure_reward = treasure_reward
-        self.default_reward = default_reward
+import numpy as np
+from scipy import stats
 
 
 class Instance:
@@ -95,6 +68,10 @@ class TreeNode:
     def instances(self):
         return self.__instances
 
+    @instances.setter
+    def instances(self, value):
+        self.__instances = value
+
     @property
     def is_leaf(self):
         return self.__is_leaf
@@ -114,7 +91,8 @@ class TreeNode:
 
 class QMat:
     def __init__(self, leaves, actions) -> None:
-        self.q_values = [{'leaf': _, 'actions_q': [{'action': _, 'q': 0.} for _ in actions]} for _ in leaves]
+        self.actions = actions
+        self.q_values = [{'leaf': _, 'actions_q': [{'action': _, 'q': 0.} for _ in self.actions]} for _ in leaves]
 
     def get_q_by_leaf_and_action(self, leaf: TreeNode, action: str):
         for leaf_actions_q in self.q_values:
@@ -135,12 +113,23 @@ class QMat:
             if leaf_actions_q['leaf'] == leaf:
                 return leaf_actions_q['actions_q']
 
+    def split_at_leaf(self, leaf: TreeNode):
+        for child in leaf.children:
+            self.q_values.append({'leaf': child, 'actions_q': [{'action': _, 'q': 0.} for _ in self.actions]})
 
-class Usm:
+        # 只删除一个用for..in应该没问题
+        for leaf_actions_q in self.q_values:
+            if leaf_actions_q['leaf'] is leaf:
+                self.q_values.remove(leaf_actions_q)
+                break
+
+
+class SSCUsm:
 
     def __init__(self, observations: List[str], actions: List[str], gamma=0.9):
         self.__root: TreeNode = TreeNode("root")
         self.__instances: List[Instance] = []
+        self.__test_instances: List[Instance] = []  # 测试的时候使用
 
         self.__leaves: List[TreeNode] = []
         self.__gamma: float = gamma
@@ -182,10 +171,6 @@ class Usm:
     def instances(self):
         return self.__instances
 
-    @instances.setter
-    def instances(self, value):
-        self.__instances = value
-
     def new_round(self, initial_observation):
         self.clear_instance()
         self.add_instance(Instance(None, "", initial_observation, 0))
@@ -197,20 +182,13 @@ class Usm:
         elif node.type is TreeNodeType.action:
             node.children = [TreeNode(_, parent=node) for _ in self.__observations]
 
-    def get_last_instance(self):
-        if len(self.instances) == 0:
-            return None
-        else:
-            return self.instances[-1]
+    def add_test_instance(self, instance):
+        if self.get_last_test_instance() is not None:
+            self.__test_instances[-1].follow = instance
+        self.__test_instances.append(instance)
 
-    def is_last_two_instances_observe_the_same(self):
-        if len(self.instances) >= 2:
-            return self.instances[-1].observation == self.instances[-2].observation
-        else:
-            return False
-
-    def clear_instance(self):
-        self.instances = []
+        current_state: TreeNode = self.get_state(instance)
+        return current_state
 
     def add_instance(self, instance: Instance):
         # 加入绝对实例历史
@@ -223,9 +201,10 @@ class Usm:
             if current_state.type is TreeNodeType.action:
                 # 如果状态是一个动作节点，那么回溯一个实例，找到与回溯的实例 observation 字段相同的边缘节点，并置入实例
                 previous = instance.previous
-                for _ in current_state.children:
-                    if _.name == previous.observation:
-                        _.instances.append(previous)
+                if previous is not None:
+                    for _ in current_state.children:
+                        if _.name == previous.observation:
+                            _.instances.append(previous)
 
                 # 然后将该实例加入该状态
                 current_state.instances.append(instance)
@@ -244,6 +223,7 @@ class Usm:
         else:
             return None
 
+    # 论文中的L(T_i)
     def get_state(self, instance: Instance):
         nodes: List[TreeNode] = self.__root.children
         depth = 1  # nodes的深度
@@ -282,14 +262,140 @@ class Usm:
                             nodes = n.children
                             depth += 1
 
+                if instance.action == '':
+                    # 根节点的action字段匹配不到任何状态，返回None
+                    return None
+
                 assert hit is True
 
+    # 论文中的 Q(s,a) = R(s,a) + \gamma * Pr(s'|s,a) * U(s')
     def update_q_mat(self):
-        for leaf in self.__leaves:
-            for action in self.actions:
-                updated_q = self.get_r(leaf, action) + self.gamma * self.get_pr_u(leaf, action)
-                self.q_mat.set_q_by_leaf_and_action(leaf, action, updated_q)
+        for _ in range(5):
+            for leaf in self.__leaves:
+                for action in self.actions:
+                    updated_q = self.get_r(leaf, action) + self.gamma * self.get_pr_u(leaf, action)
+                    self.q_mat.set_q_by_leaf_and_action(leaf, action, updated_q)
 
+    # 论文中的 a_{t+1} = \argmax_{a \in A} Q(L(T_t), a)
+    def get_action_with_max_q(self, leaf: TreeNode):
+        if leaf is None:
+            return ''
+        else:
+            actions_q: List[dict] = self.q_mat.get_actions_q_by_leaf(leaf)
+            u = float('-inf')
+            action = ''
+
+            first_action_q = actions_q[0]['q']  # 第一个动作的q值
+            all_same = True  # 判断大家q值是不是一样
+
+            for action_q in actions_q:
+                if action_q['q'] > u:
+                    u = action_q['q']
+                    if u != first_action_q:
+                        all_same = False
+                    action = action_q['action']
+
+            # 如果大家q值都是一样，应该随便选，总是选最先出现的就走不出去了
+            if all_same:
+                action = np.random.choice(self.actions)
+            return action
+
+    # 论文中使用ks校验分裂状态
+    def check_fringe(self, current_state: TreeNode) -> TreeNode:
+        if current_state.depth >= 3:
+            return current_state
+
+        # 这个父节点要有一定数量的实例才比较好
+        if len(current_state.instances) < 32:
+            return current_state
+
+        # 先生成父节点包含的实例集合的预期收益集合，封装成一维的ndarray
+        parent_qs = np.array([self.get_expected_discounted_reward_of_instance(_) for _ in current_state.instances])
+
+        # 对于每一个子节点，生成子节点包含的实例集合的预期收益集合，封装成一维的ndarray，与父节点的分布进行ks校验
+        for child in current_state.children:
+            # 这个子节点要有一定数量的实例才比较好
+            if len(child.instances) > 0.25 * len(current_state.instances):
+                child_qs = np.array([self.get_expected_discounted_reward_of_instance(_) for _ in child.instances])
+                d, p_value = stats.ks_2samp(parent_qs, child_qs)
+
+                # 当p_value太低，推翻他们两个来自同一个分布的零假设，这个节点需要分裂
+                if p_value < 0.1:
+                    self.split_state(current_state)
+                    break
+
+        # 更新现在的agent状态，并返回
+        return self.get_state(self.get_last_instance())
+
+    def split_state(self, current_state: TreeNode):
+
+        # 更新叶子节点列表，删除已经不是叶节点的节点，并加入新晋的叶节点
+        self.__leaves.remove(current_state)
+        for child in current_state.children:
+            self.build_fringe(child)
+            self.__leaves.append(child)
+            child.is_leaf = True
+
+            # 从新的叶节点的实例列表中，挑选实例到该节点的相应边缘节点中
+            if child.type == TreeNodeType.action:
+                # 如果是一个action节点成为了新的leaf，那么需要回溯这个节点的实例列表中的每一个实例的前一个非空实例，根据observation值放到不同的子观察节点
+                previous_instances = [_.previous for _ in child.instances if _.previous is not None]
+                for grand_child in child.children:
+                    assert grand_child.type == TreeNodeType.observation
+                    grand_child.instances = [_ for _ in previous_instances if _.observation == grand_child.name]
+            elif child.type == TreeNodeType.observation:
+                # 如果是一个observation节点成为了新的leaf，那么需要根据这个节点的实例列表中的每一个实例，根据action值放到不同的子动作节点
+                for grand_child in child.children:
+                    assert grand_child.type == TreeNodeType.action
+                    grand_child.instances = [_ for _ in child.instances if _.action == grand_child.name]
+
+        # 清除原叶子节点的标记和缓存的实例
+        current_state.is_leaf = False
+        current_state.instances = []
+
+        # Q表也需要分裂，分裂后执行一次跟新
+        self.q_mat.split_at_leaf(current_state)
+        self.update_q_mat()
+
+        pass
+
+    """
+    不是特别重要的在中间调用的方法
+    """
+
+    def get_last_instance(self):
+        if len(self.instances) == 0:
+            return None
+        else:
+            return self.instances[-1]
+
+    def get_last_test_instance(self):
+        if len(self.__test_instances) == 0:
+            return None
+        else:
+            return self.__test_instances[-1]
+        pass
+
+    def is_last_two_instances_observe_the_same(self):
+        if len(self.instances) >= 2:
+            return self.instances[-1].observation == self.instances[-2].observation
+        else:
+            return False
+
+    def clear_instance(self):
+        self.__instances = []
+
+    def clear_test_instance(self):
+        self.__test_instances = []
+
+    # 论文中的 Q(T_i) = r_i + \gamma * U(L(T_{i+1}))
+    def get_expected_discounted_reward_of_instance(self, instance: Instance):
+        r = instance.reward
+        next_leaf = self.get_state(instance.follow)
+        u = self.get_u(next_leaf)
+        return r + self.gamma * u
+
+    # 论文中的 U(s) = max_{a \in A} Q(s,a)
     def get_u(self, leaf: TreeNode):
         if leaf is None:
             return 0.
@@ -301,39 +407,30 @@ class Usm:
                     u = action_q['q']
             return u
 
+    # 论文中的 R(s,a) = (\sum_{T_i \in Instances(s).follow(a)} r_i)/|Instances(s,a)|
     def get_r(self, leaf: TreeNode, action: str) -> float:
-        instances_s_a: List[Instance] = [_ for _ in leaf.instances if _.action == action]
+        instances_s_follow_a: List[Instance] = [_.follow for _ in leaf.instances
+                                                if (_.follow is not None and _.follow.action == action)]
         r = 0.
-        for instance in instances_s_a:
+        for instance in instances_s_follow_a:
             r += instance.reward
 
-        if len(instances_s_a) == 0:
+        if len(instances_s_follow_a) == 0:
             return 0
         else:
-            return r / len(instances_s_a)
+            return r / len(instances_s_follow_a)
 
+    # 使用了论文中的 Pr(s'|s,a) = (\forall T_i \in Instances(s).follow(a) s.t. L(T_{i+1} = s'))/|Instances(s,a)|
+    # 实现了Pr_U(s,a) = \sum{s'} Pr(s'|s,a)U(s')
     def get_pr_u(self, leaf: TreeNode, action: str) -> float:
-        instances_s_a: List[Instance] = [_ for _ in leaf.instances if _.action == action]
+        instances_s_follow_a: List[Instance] = [_.follow for _ in leaf.instances
+                                                if (_.follow is not None and _.follow.action == action)]
         pr_u = 0.
-        for instance in instances_s_a:
-            next_leaf = self.get_state(instance.follow)
+        for instance in instances_s_follow_a:
+            next_leaf = self.get_state(instance)
             pr_u += self.get_u(next_leaf)
 
-        if len(instances_s_a) == 0:
-            return 0.
+        if len(instances_s_follow_a) == 0:
+            return 0
         else:
-            return pr_u / len(instances_s_a)
-
-    def get_action_with_max_q(self):
-        leaf: TreeNode = self.get_state(self.instances[-1])
-        if leaf is None:
-            return ''
-        else:
-            actions_q: List[dict] = self.q_mat.get_actions_q_by_leaf(leaf)
-            u = float('-inf')
-            action = ''
-            for action_q in actions_q:
-                if action_q['q'] > u:
-                    u = action_q['q']
-                    action = action_q['action']
-            return action
+            return pr_u / len(instances_s_follow_a)
