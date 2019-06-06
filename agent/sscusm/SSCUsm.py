@@ -5,7 +5,7 @@ from scipy import stats
 
 
 class Instance:
-    def __init__(self, previous, action: str, observation: str, reward):
+    def __init__(self, previous, action: str, observation: str, reward, cached_check_point):
         self.previous: Instance = previous
         self.action = action
         self.observation = observation
@@ -13,6 +13,8 @@ class Instance:
 
         # 这个字段仅记录绝对访问顺序，一个在UsmNode局部的instances列表里的instance，其follow不一定还在该列表中
         self.follow: Instance = None
+
+        self.check_point = cached_check_point
 
 
 class TreeNodeType(Enum):
@@ -133,6 +135,7 @@ class SSCUsm:
 
         self.__leaves: List[TreeNode] = []
         self.__gamma: float = gamma
+        self.__non_repetitive_observations_length: int = 5
 
         # observations 和 actions 是为了构建usm树
         self.__actions: List[str] = actions
@@ -168,12 +171,28 @@ class SSCUsm:
         return self.__gamma
 
     @property
+    def leaves(self):
+        return self.__leaves
+
+    @property
     def instances(self):
         return self.__instances
 
-    def new_round(self, initial_observation):
+    @property
+    def test_instances(self):
+        return self.__test_instances
+
+    @property
+    def non_repetitive_observations_length(self):
+        return self.__non_repetitive_observations_length
+
+    @non_repetitive_observations_length.setter
+    def non_repetitive_observations_length(self, value):
+        self.__non_repetitive_observations_length = value
+
+    def new_round(self, initial_observation, cached_check_point):
         self.clear_instance()
-        self.add_instance(Instance(None, "", initial_observation, 0))
+        self.add_instance(Instance(None, "", initial_observation, 0, cached_check_point))
 
     def build_fringe(self, node: TreeNode):
         # 这里我们只做一层边缘节点
@@ -270,7 +289,7 @@ class SSCUsm:
 
     # 论文中的 Q(s,a) = R(s,a) + \gamma * Pr(s'|s,a) * U(s')
     def update_q_mat(self):
-        for _ in range(5):
+        for _ in range(self.non_repetitive_observations_length):
             for leaf in self.__leaves:
                 for action in self.actions:
                     updated_q = self.get_r(leaf, action) + self.gamma * self.get_pr_u(leaf, action)
@@ -302,7 +321,10 @@ class SSCUsm:
 
     # 论文中使用ks校验分裂状态
     def check_fringe(self, current_state: TreeNode) -> TreeNode:
-        if current_state.depth >= 3:
+        # if current_state.depth >= 2 * self.non_repetitive_observations_length - 1:
+        #     return current_state
+
+        if current_state.depth >= 12:
             return current_state
 
         # 这个父节点要有一定数量的实例才比较好

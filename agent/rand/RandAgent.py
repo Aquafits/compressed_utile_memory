@@ -10,7 +10,7 @@ from maze.Maze import Maze
 class RandAgent(object):
     def __init__(self, maze: Maze, bumped_penalty=0):
 
-        self.gamma = 0.9
+        self.gamma = 0.8
         self.maze = maze
         self.name = 'Rand'
 
@@ -40,9 +40,9 @@ class RandAgent(object):
         from agent.utils import opposite_pairs
 
         action = np.random.choice(self.actions)
-        if self.cached_action is not None:
-            while action == opposite_pairs.get(self.cached_action):
-                action = np.random.choice(self.actions)
+        # if self.cached_action is not None:
+        #     while action == opposite_pairs.get(self.cached_action):
+        #         action = np.random.choice(self.actions)
 
         return action
 
@@ -123,10 +123,13 @@ class RandAgent(object):
         check_point_durations = []
 
         self.new_round()
-        start_time = time.clock()
-        test_start_time = start_time
-        test_end_time = start_time
+
         for i in range(iters):
+
+            start_time = time.clock()
+            test_start_time = start_time
+            test_end_time = start_time
+
             if i in check_points:
                 test_start_time = time.clock()
                 print("    Checkpoint at {}:".format(i))

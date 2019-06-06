@@ -1,12 +1,12 @@
 from maze.Maze import Maze
 
 walls = [
-    [1, 1], [1, 2], [1, 4], [1, 5],
-    [2, 1], [2, 2], [2, 4], [2, 5],
-    [3, 1], [3, 2], [3, 4], [3, 5]
+    [2, 2], [2, 3], [2, 7], [2, 8],
+    [3, 2], [3, 3], [3, 7], [3, 8],
+    [4, 2], [4, 3], [4, 7], [4, 8],
 ]
 
-treasures = [[2, 3]]
+treasures = [[3, 5]]
 snake_pits = []
 
 observations = [
@@ -34,4 +34,4 @@ actions = [
     'south'
 ]
 
-hallway_2 = Maze(walls, treasures, snake_pits, 5, 7, observations, actions, default_reward=-0.1, treasure_reward=32)
+hallway_3 = Maze(walls, treasures, snake_pits, 7, 11, observations, actions, default_reward=-1, treasure_reward=32)

@@ -6,15 +6,15 @@ import numpy as np
 
 from typing import Tuple
 
-from agent.usm.Usm import Usm, Instance
+from agent.sscusm.SSCUsm import SSCUsm, Instance
 from maze.Maze import Maze
 
 
-class UsmAgent(object):
+class CsmAgent(object):
     def __init__(self, maze: Maze, bumped_penalty=0):
 
         self.maze = maze
-        self.name = 'USM'
+        self.name = 'CSM'
 
         self.pos = self.get_random_pos()  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
@@ -27,8 +27,10 @@ class UsmAgent(object):
         self.cached_observation = ''
         self.cached_state = None
         self.cached_reward = 0
+        self.cached_check_point = 0
 
-        self.usm: Usm = Usm(maze.observations, maze.actions, gamma=0.8)
+        self.usm: SSCUsm = SSCUsm(maze.observations, maze.actions, gamma=0.8)
+        self.usm.non_repetitive_observations_length = self.blind_exploration()
 
     def new_round(self):
 
@@ -40,7 +42,7 @@ class UsmAgent(object):
         self.cached_state = None
         self.cached_reward = 0
 
-        self.usm.new_round(self.observe())
+        self.usm.new_round(self.observe(), self.cached_check_point)
 
     def get_random_pos(self):
         [y, x] = self.maze.walls[0]
@@ -50,8 +52,79 @@ class UsmAgent(object):
 
         return [y, x]
 
+    def blind_exploration(self, iters=256):
+        self.usm.clear_test_instance()
+        self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
+
+        goal_count = 0
+        for i in range(iters):
+            e = 1.0
+            p = 1
+            action = self.select_e_greedily(e, force_ahead=p)
+            while True:
+                moved, do_check = self.move(action, i, learning=False)
+                if not moved:
+                    p /= 2
+                    action = self.select_e_greedily(e, force_ahead=p)
+                else:
+                    break
+
+            if self.pos in self.maze.treasures:
+                self.pos = self.get_random_pos()
+                goal_count += 1
+
+        self.cached_action = ''
+        self.cached_observation = ''
+        self.cached_state = None
+        self.cached_reward = 0
+
+        observations = [_.observation for _ in self.usm.test_instances]
+        length = 1
+        if len(observations) == 1:
+            return length
+        else:
+            observation_set = set()
+            j = i = 0
+            while i < len(observations) and j < len(observations):
+                if observations[j] not in observation_set:
+                    observation_set.add(observations[j])
+                    j += 1
+                    length = max(j - i, length)
+                else:
+                    observation_set.remove(observations[i])
+                    i += 1
+            return length
+
+    # 用boltzmann方式探索/选择下一步的动作
+    def select_by_boltzmann_sampling(self, temperature=10., learning=True, force_ahead=0.25):
+        from agent.utils import opposite_pairs
+
+        if self.cached_state is None:
+            # 如果当前的状态未知，则进行随机探索，直至move方法更新缓存的状态
+            action = np.random.choice(self.actions)
+        else:
+            actions_q = self.usm.q_mat.get_actions_q_by_leaf(self.cached_state)
+            actions = [action_q['action'] for action_q in actions_q]
+            q = [action_q['q'] for action_q in actions_q]
+            exponent = np.true_divide(q - np.max(q), temperature)
+            boltzmann_distribution = np.exp(exponent) / np.sum(np.exp(exponent))
+            action = np.random.choice(actions, p=boltzmann_distribution)
+
+        # 选择和之前instance动作的相反值不一样的随机的动作，即不走回头路，返回值是一个str，这个先验设定高于已学的经验
+        if np.random.uniform(0, 1) < force_ahead:
+            if learning:
+                if self.usm.get_last_instance() is not None:
+                    while action == opposite_pairs.get(self.usm.get_last_instance().action):
+                        action = np.random.choice(self.actions)
+            else:
+                if self.usm.get_last_test_instance() is not None:
+                    while action == opposite_pairs.get(self.usm.get_last_test_instance().action):
+                        action = np.random.choice(self.actions)
+
+        return action
+
     # 用e-greedy方式探索/选择下一步的动作
-    def select_e_greedily(self, e=0.2, learning=True):
+    def select_e_greedily(self, e=0.2, learning=True, force_ahead=0.25):
         from agent.utils import opposite_pairs
 
         # # 当观察相同，有概率选择与上次一样的动作
@@ -66,14 +139,15 @@ class UsmAgent(object):
             action = self.usm.get_action_with_max_q(self.cached_state)
 
         # 选择和之前instance动作的相反值不一样的随机的动作，即不走回头路，返回值是一个str，这个先验设定高于已学的经验
-        # if learning:
-        #     if self.usm.get_last_instance() is not None:
-        #         while action == opposite_pairs.get(self.usm.get_last_instance().action):
-        #             action = np.random.choice(self.actions)
-        # else:
-        #     if self.usm.get_last_test_instance() is not None:
-        #         while action == opposite_pairs.get(self.usm.get_last_test_instance().action):
-        #             action = np.random.choice(self.actions)
+        if np.random.uniform(0, 1) < force_ahead:
+            if learning:
+                if self.usm.get_last_instance() is not None:
+                    while action == opposite_pairs.get(self.usm.get_last_instance().action):
+                        action = np.random.choice(self.actions)
+            else:
+                if self.usm.get_last_test_instance() is not None:
+                    while action == opposite_pairs.get(self.usm.get_last_test_instance().action):
+                        action = np.random.choice(self.actions)
 
         return action
 
@@ -112,13 +186,11 @@ class UsmAgent(object):
                 self.cached_reward = self.instant_reward(i=i)
 
                 previous = self.usm.get_last_instance()
-                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward)
+                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward,
+                                        self.cached_check_point)
                 new_state = self.usm.add_instance(new_instance)
-
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
-
-                if i % 16 == 0:
                     do_check = True
 
                 if self.cached_state is None:
@@ -137,7 +209,8 @@ class UsmAgent(object):
                 self.cached_reward = self.instant_reward(i=i)
 
                 previous = self.usm.get_last_test_instance()
-                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward)
+                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward,
+                                        cached_check_point=-1)
                 new_state = self.usm.add_test_instance(new_instance)
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
@@ -192,6 +265,7 @@ class UsmAgent(object):
         iteration_durations = []
         check_point_durations = []
 
+        self.cached_check_point = check_points[0]
         self.new_round()
 
         for i in range(iters):
@@ -200,12 +274,16 @@ class UsmAgent(object):
             test_start_time = start_time
             test_end_time = start_time
 
-            if i < 0.25 * iters:
-                e = 0.8
+            if i < 128:
+                temperature = float('inf')
             else:
-                e = 0.2 * (1 - (i / iters))
-            action = self.select_e_greedily(e)
+                temperature = 16 * np.cos((np.pi / 3) * (i / iters) + (np.pi / 6))
+
+            # action = self.select_e_greedily(e)
+            p = 1.0
+            action = self.select_by_boltzmann_sampling(temperature, force_ahead=p)
             while True:
+
                 moved, do_check = self.move(action, i)
                 if moved:
                     if do_check and self.cached_state is not None:
@@ -213,13 +291,27 @@ class UsmAgent(object):
                         self.cached_state = self.usm.check_fringe(self.cached_state)
                     break
                 else:
-                    action = self.select_e_greedily(e)
+                    # action = self.select_e_greedily(e)
+                    temperature *= 1.25
+                    p /= 2
+                    action = self.select_by_boltzmann_sampling(temperature, force_ahead=p)
 
             if i in check_points:
+                self.cached_check_point = i  # 更新缓存的检查点标签
+
+                index = check_points.index(i)
                 test_start_time = time.clock()
-                print("    Checkpoint at {}:".format(i))
+                print("    Checkpoint at {}:".format(index))
+
                 val = self.generate_average_discounted_return(trial_times, steps_per_trial)
+                if index > 3 and (val - min(check_point_values)) < 0.875 * (
+                        max(check_point_values) - min(check_point_values)):
+                    self.ensure_learning_quality(check_points[index - 1], i)
+                    self.usm.update_q_mat()
+                    val = self.generate_average_discounted_return(trial_times, steps_per_trial)
+
                 check_point_values.append(val)
+
                 test_end_time = time.clock()
                 check_point_durations.append((test_end_time - test_start_time))
 
@@ -235,7 +327,7 @@ class UsmAgent(object):
     def test_iterate(self, iters):
         self.pos = self.get_random_pos()
         self.usm.clear_test_instance()
-        self.usm.add_test_instance(Instance(None, "", self.observe(), 0))
+        self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
         self.reward = 0
         self.cached_state = None
 
@@ -243,12 +335,15 @@ class UsmAgent(object):
 
         get_treasure = False
         for i in range(iters):
-            e = 0.1
-            action = self.select_e_greedily(e, learning=False)
+            temperature = 2 / (1 + i)
+            p = 1
+            action = self.select_by_boltzmann_sampling(temperature, learning=False, force_ahead=p)
             while True:
                 moved, do_check = self.move(action, i, learning=False)
                 if not moved:
-                    action = self.select_e_greedily(e, learning=False)
+                    temperature *= 2
+                    p /= 2
+                    action = self.select_by_boltzmann_sampling(temperature, learning=False, force_ahead=p)
                 else:
                     break
 
@@ -280,3 +375,12 @@ class UsmAgent(object):
             self.cached_observation = observation
             self.cached_action = action
         return np.mean(rewards)
+
+    def ensure_learning_quality(self, left, right):
+        for instance in self.usm.instances:
+            instance.check_point = right
+
+        for leaf in self.usm.leaves:
+            leaf.instances = [_ for _ in leaf.instances if _.check_point != left]
+            for child in leaf.children:
+                child.instances = [_ for _ in child.instances if _.check_point != left]

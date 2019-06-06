@@ -27,8 +27,10 @@ class SSCUsmAgent(object):
         self.cached_observation = ''
         self.cached_state = None
         self.cached_reward = 0
+        self.cached_check_point = 0
 
-        self.usm: SSCUsm = SSCUsm(maze.observations, maze.actions, gamma=0.9)
+        self.usm: SSCUsm = SSCUsm(maze.observations, maze.actions, gamma=0.8)
+        self.usm.non_repetitive_observations_length = self.blind_exploration()
 
     def new_round(self):
 
@@ -40,7 +42,7 @@ class SSCUsmAgent(object):
         self.cached_state = None
         self.cached_reward = 0
 
-        self.usm.new_round(self.observe())
+        self.usm.new_round(self.observe(), self.cached_check_point)
 
     def get_random_pos(self):
         [y, x] = self.maze.walls[0]
@@ -49,6 +51,47 @@ class SSCUsmAgent(object):
             x = random.randint(0, self.maze.x_size - 1)
 
         return [y, x]
+
+    def blind_exploration(self, iters=256):
+        self.usm.clear_test_instance()
+        self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
+
+        goal_count = 0
+        for i in range(iters):
+            e = 1.0
+            action = self.select_e_greedily(e)
+            while True:
+                moved, do_check = self.move(action, i, learning=False)
+                if not moved:
+                    action = self.select_e_greedily(e)
+                else:
+                    break
+
+            if self.pos in self.maze.treasures:
+                self.pos = self.get_random_pos()
+                goal_count += 1
+
+        self.cached_action = ''
+        self.cached_observation = ''
+        self.cached_state = None
+        self.cached_reward = 0
+
+        observations = [_.observation for _ in self.usm.test_instances]
+        length = 1
+        if len(observations) == 1:
+            return length
+        else:
+            observation_set = set()
+            j = i = 0
+            while i < len(observations) and j < len(observations):
+                if observations[j] not in observation_set:
+                    observation_set.add(observations[j])
+                    j += 1
+                    length = max(j - i, length)
+                else:
+                    observation_set.remove(observations[i])
+                    i += 1
+            return length
 
     # 用e-greedy方式探索/选择下一步的动作
     def select_e_greedily(self, e=0.2, learning=True):
@@ -66,14 +109,14 @@ class SSCUsmAgent(object):
             action = self.usm.get_action_with_max_q(self.cached_state)
 
         # 选择和之前instance动作的相反值不一样的随机的动作，即不走回头路，返回值是一个str，这个先验设定高于已学的经验
-        if learning:
-            if self.usm.get_last_instance() is not None:
-                while action == opposite_pairs.get(self.usm.get_last_instance().action):
-                    action = np.random.choice(self.actions)
-        else:
-            if self.usm.get_last_test_instance() is not None:
-                while action == opposite_pairs.get(self.usm.get_last_test_instance().action):
-                    action = np.random.choice(self.actions)
+        # if learning:
+        #     if self.usm.get_last_instance() is not None:
+        #         while action == opposite_pairs.get(self.usm.get_last_instance().action):
+        #             action = np.random.choice(self.actions)
+        # else:
+        #     if self.usm.get_last_test_instance() is not None:
+        #         while action == opposite_pairs.get(self.usm.get_last_test_instance().action):
+        #             action = np.random.choice(self.actions)
 
         return action
 
@@ -102,7 +145,7 @@ class SSCUsmAgent(object):
         else:
             # 如果没有撞墙，缓存这次的动作、观察、回报和状态，更新所有有关节点的实例
             if learning:
-                # do_check: bool = False
+                do_check: bool = False
 
                 old_pos = self.pos
                 self.pos = new_pos
@@ -112,11 +155,12 @@ class SSCUsmAgent(object):
                 self.cached_reward = self.instant_reward(i=i)
 
                 previous = self.usm.get_last_instance()
-                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward)
+                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward,
+                                        self.cached_check_point)
                 new_state = self.usm.add_instance(new_instance)
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
-                #     do_check = True
+                    do_check = True
 
                 if self.cached_state is None:
                     name = 'unknown'
@@ -125,8 +169,7 @@ class SSCUsmAgent(object):
                 print("{:<3}: {} -> {}, acted {}, now observing {}, at state {}".format(
                     i, old_pos, new_pos, action, self.cached_observation, name))
 
-                # return True, do_check
-                return True, True
+                return True, do_check
             else:
                 self.pos = new_pos
 
@@ -135,7 +178,8 @@ class SSCUsmAgent(object):
                 self.cached_reward = self.instant_reward(i=i)
 
                 previous = self.usm.get_last_test_instance()
-                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward)
+                new_instance = Instance(previous, self.cached_action, self.cached_observation, self.cached_reward,
+                                        cached_check_point=-1)
                 new_state = self.usm.add_test_instance(new_instance)
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
@@ -190,15 +234,23 @@ class SSCUsmAgent(object):
         iteration_durations = []
         check_point_durations = []
 
+        self.cached_check_point = check_points[0]
         self.new_round()
-        start_time = time.clock()
-        test_start_time = start_time
-        test_end_time = start_time
+
         for i in range(iters):
 
-            e = 0.2
+            start_time = time.clock()
+            test_start_time = start_time
+            test_end_time = start_time
+
+            if i < 128:
+                e = 0.75
+            else:
+                e = 0.25 * (iters - i) / iters
+
             action = self.select_e_greedily(e)
             while True:
+
                 moved, do_check = self.move(action, i)
                 if moved:
                     if do_check and self.cached_state is not None:
@@ -206,13 +258,25 @@ class SSCUsmAgent(object):
                         self.cached_state = self.usm.check_fringe(self.cached_state)
                     break
                 else:
+                    e *= 1.25
                     action = self.select_e_greedily(e)
 
             if i in check_points:
+                self.cached_check_point = i  # 更新缓存的检查点标签
+
+                index = check_points.index(i)
                 test_start_time = time.clock()
-                print("    Checkpoint at {}:".format(i))
+                print("    Checkpoint at {}:".format(index))
+
                 val = self.generate_average_discounted_return(trial_times, steps_per_trial)
+                if index > 3 and (val - min(check_point_values)) < 0.9 * (
+                        max(check_point_values) - min(check_point_values)):
+                    self.ensure_learning_quality(check_points[index - 1], i)
+                    self.usm.update_q_mat()
+                    val = self.generate_average_discounted_return(trial_times, steps_per_trial)
+
                 check_point_values.append(val)
+
                 test_end_time = time.clock()
                 check_point_durations.append((test_end_time - test_start_time))
 
@@ -228,7 +292,7 @@ class SSCUsmAgent(object):
     def test_iterate(self, iters):
         self.pos = self.get_random_pos()
         self.usm.clear_test_instance()
-        self.usm.add_test_instance(Instance(None, "", self.observe(), 0))
+        self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
         self.reward = 0
         self.cached_state = None
 
@@ -236,11 +300,12 @@ class SSCUsmAgent(object):
 
         get_treasure = False
         for i in range(iters):
-            e = 0.1
+            e = 0.05
             action = self.select_e_greedily(e, learning=False)
             while True:
                 moved, do_check = self.move(action, i, learning=False)
                 if not moved:
+                    e *= 1.25
                     action = self.select_e_greedily(e, learning=False)
                 else:
                     break
@@ -249,6 +314,7 @@ class SSCUsmAgent(object):
                 print("gets reward {}, goal after {} steps.".format(self.reward, i + 1))
                 get_treasure = True
                 break
+        self.usm.clear_test_instance()
 
         if not get_treasure:
             print("gets reward {}, no goal after {} steps.".format(self.reward, iters))
@@ -272,3 +338,12 @@ class SSCUsmAgent(object):
             self.cached_observation = observation
             self.cached_action = action
         return np.mean(rewards)
+
+    def ensure_learning_quality(self, left, right):
+        for instance in self.usm.instances:
+            instance.check_point = right
+
+        for leaf in self.usm.leaves:
+            leaf.instances = [_ for _ in leaf.instances if _.check_point != left]
+            for child in leaf.children:
+                child.instances = [_ for _ in child.instances if _.check_point != left]

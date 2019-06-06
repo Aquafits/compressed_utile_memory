@@ -302,7 +302,7 @@ class Usm:
     # 论文中使用ks校验分裂状态
     def check_fringe(self, current_state: TreeNode) -> TreeNode:
         # 这个父节点要有一定数量的实例才比较好
-        # if len(current_state.instances) < 64:
+        # if len(current_state.instances) < 16:
         #     return current_state
 
         # 先生成父节点包含的实例集合的预期收益集合，封装成一维的ndarray
@@ -371,12 +371,6 @@ class Usm:
         else:
             return self.__test_instances[-1]
         pass
-
-    def is_last_two_instances_observe_the_same(self):
-        if len(self.instances) >= 2:
-            return self.instances[-1].observation == self.instances[-2].observation
-        else:
-            return False
 
     def clear_instance(self):
         self.__instances = []
