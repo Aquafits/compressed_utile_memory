@@ -21,6 +21,7 @@ walls = [
 ]
 treasures = [[7, 7]]
 snake_pits = [[5, 4]]
+start_positions = []
 
 observations = [
     '____',  # 0
@@ -47,4 +48,4 @@ actions = [
     'south'
 ]
 
-usm_demo_maze = Maze(walls, treasures, snake_pits, 18, 18, observations, actions)
+usm_demo_maze = Maze(walls, treasures, snake_pits, start_positions,  18, 18, observations, actions)

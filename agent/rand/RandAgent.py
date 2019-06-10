@@ -14,7 +14,7 @@ class RandAgent(object):
         self.maze = maze
         self.name = 'Rand'
 
-        self.pos = self.get_random_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
 
@@ -24,8 +24,15 @@ class RandAgent(object):
         self.cached_action = None
 
     def new_round(self):
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.reward = 0
+
+    def get_start_pos(self, provided=True):
+        if provided:
+            i = np.random.choice([_ for _ in range(len(self.maze.start_positions))])
+            return self.maze.start_positions[i]
+        else:
+            return self.get_random_pos()
 
     def get_random_pos(self):
         [y, x] = self.maze.walls[0]
@@ -120,7 +127,9 @@ class RandAgent(object):
             check_points = []
         check_point_values = []
         iteration_durations = []
-        check_point_durations = []
+        check_point_reach_time = []
+
+        alg_start_time = time.clock()
 
         self.new_round()
 
@@ -132,19 +141,21 @@ class RandAgent(object):
 
             if i in check_points:
                 test_start_time = time.clock()
+                check_point_reach_time.append(test_start_time - alg_start_time)
+
                 print("    Checkpoint at {}:".format(i))
+
                 val = self.generate_average_discounted_return(trial_times, steps_per_trial)
                 check_point_values.append(val)
                 test_end_time = time.clock()
-                check_point_durations.append(test_end_time - test_start_time)
 
             end_time = time.clock()
             iteration_durations.append((end_time - test_end_time) - (test_start_time - start_time))
 
-        return check_point_values, check_point_durations, iteration_durations
+        return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.reward = 0
         print("starts at {},".format(self.pos), end=' ')
 

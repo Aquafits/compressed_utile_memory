@@ -126,7 +126,7 @@ class QMat:
                 break
 
 
-class SSCUsm:
+class Csm:
 
     def __init__(self, observations: List[str], actions: List[str], gamma=0.9):
         self.__root: TreeNode = TreeNode("root")
@@ -135,7 +135,7 @@ class SSCUsm:
 
         self.__leaves: List[TreeNode] = []
         self.__gamma: float = gamma
-        self.__non_repetitive_observations_length: int = 5
+        self.__longest_edge: int = 8
 
         # observations 和 actions 是为了构建usm树
         self.__actions: List[str] = actions
@@ -183,12 +183,12 @@ class SSCUsm:
         return self.__test_instances
 
     @property
-    def non_repetitive_observations_length(self):
-        return self.__non_repetitive_observations_length
+    def longest_edge(self):
+        return self.__longest_edge
 
-    @non_repetitive_observations_length.setter
-    def non_repetitive_observations_length(self, value):
-        self.__non_repetitive_observations_length = value
+    @longest_edge.setter
+    def longest_edge(self, value):
+        self.__longest_edge = value
 
     def new_round(self, initial_observation, cached_check_point):
         self.clear_instance()
@@ -248,7 +248,7 @@ class SSCUsm:
         depth = 1  # nodes的深度
 
         # 进行后缀匹配
-        while depth < 20:
+        while depth < 2 * self.longest_edge:
             # 在多轮实验的时候，有的时候instance序列不够长，但是被标记成状态的节点已经很深了，就匹配不到，匹配不到就返回None
             if instance is None:
                 return None
@@ -289,7 +289,7 @@ class SSCUsm:
 
     # 论文中的 Q(s,a) = R(s,a) + \gamma * Pr(s'|s,a) * U(s')
     def update_q_mat(self):
-        for _ in range(self.non_repetitive_observations_length):
+        for _ in range(1):
             for leaf in self.__leaves:
                 for action in self.actions:
                     updated_q = self.get_r(leaf, action) + self.gamma * self.get_pr_u(leaf, action)
@@ -321,14 +321,11 @@ class SSCUsm:
 
     # 论文中使用ks校验分裂状态
     def check_fringe(self, current_state: TreeNode) -> TreeNode:
-        # if current_state.depth >= 2 * self.non_repetitive_observations_length - 1:
-        #     return current_state
-
-        if current_state.depth >= 12:
+        if current_state.depth >= 2 * self.longest_edge:
             return current_state
 
         # 这个父节点要有一定数量的实例才比较好
-        if len(current_state.instances) < 32:
+        if len(current_state.instances) < 12:
             return current_state
 
         # 先生成父节点包含的实例集合的预期收益集合，封装成一维的ndarray

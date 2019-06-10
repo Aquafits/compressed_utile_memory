@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import Tuple
 
-from agent.sscusm.SSCUsm import SSCUsm, Instance
+from agent.sscusm.Csm import Csm, Instance
 from maze.Maze import Maze
 
 
@@ -16,7 +16,7 @@ class CsmAgent(object):
         self.maze = maze
         self.name = 'CSM'
 
-        self.pos = self.get_random_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
 
@@ -29,12 +29,12 @@ class CsmAgent(object):
         self.cached_reward = 0
         self.cached_check_point = 0
 
-        self.usm: SSCUsm = SSCUsm(maze.observations, maze.actions, gamma=0.8)
-        self.usm.non_repetitive_observations_length = self.blind_exploration()
+        self.usm: Csm = Csm(maze.observations, maze.actions, gamma=0.8)
+        self.usm.longest_edge = self.blind_exploration()
 
     def new_round(self):
 
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.reward = 0
 
         self.cached_action = ''
@@ -43,6 +43,13 @@ class CsmAgent(object):
         self.cached_reward = 0
 
         self.usm.new_round(self.observe(), self.cached_check_point)
+
+    def get_start_pos(self, provided=True):
+        if provided:
+            i = np.random.choice([_ for _ in range(len(self.maze.start_positions))])
+            return self.maze.start_positions[i]
+        else:
+            return self.get_random_pos()
 
     def get_random_pos(self):
         [y, x] = self.maze.walls[0]
@@ -78,22 +85,37 @@ class CsmAgent(object):
         self.cached_state = None
         self.cached_reward = 0
 
-        observations = [_.observation for _ in self.usm.test_instances]
-        length = 1
-        if len(observations) == 1:
-            return length
-        else:
-            observation_set = set()
-            j = i = 0
-            while i < len(observations) and j < len(observations):
-                if observations[j] not in observation_set:
-                    observation_set.add(observations[j])
-                    j += 1
-                    length = max(j - i, length)
-                else:
-                    observation_set.remove(observations[i])
-                    i += 1
-            return length
+        actions = [_.action for _ in self.usm.test_instances]
+
+        east_most = 0
+        west_most = 0
+        north_most = 0
+        south_most = 0
+
+        x = 0
+        y = 0
+        for a in actions:
+            if a == 'south':
+                y += 1
+                if y > south_most:
+                    south_most = y
+            elif a == 'north':
+                y -= 1
+                if y < north_most:
+                    north_most = y
+            elif a == 'east':
+                x += 1
+                if x > east_most:
+                    east_most = x
+            elif a == 'west':
+                x -= 1
+                if x < west_most:
+                    west_most = x
+            elif a == '':
+                x = 0
+                y = 0
+
+        return (south_most - north_most) + (east_most - west_most)
 
     # 用boltzmann方式探索/选择下一步的动作
     def select_by_boltzmann_sampling(self, temperature=10., learning=True, force_ahead=0.25):
@@ -126,10 +148,6 @@ class CsmAgent(object):
     # 用e-greedy方式探索/选择下一步的动作
     def select_e_greedily(self, e=0.2, learning=True, force_ahead=0.25):
         from agent.utils import opposite_pairs
-
-        # # 当观察相同，有概率选择与上次一样的动作
-        # if self.usm.is_last_two_instances_observe_the_same() and np.random.uniform(0, 1) < e:
-        #     return self.usm.get_last_instance().action
 
         if self.cached_state is None or np.random.uniform(0, 1) < e:
             # 如果当前的状态未知，则进行随机探索，直至move方法更新缓存的状态
@@ -263,7 +281,9 @@ class CsmAgent(object):
             check_points = []
         check_point_values = []
         iteration_durations = []
-        check_point_durations = []
+        check_point_reach_time = []
+
+        alg_start_time = time.clock()
 
         self.cached_check_point = check_points[0]
         self.new_round()
@@ -301,6 +321,8 @@ class CsmAgent(object):
 
                 index = check_points.index(i)
                 test_start_time = time.clock()
+                check_point_reach_time.append(test_start_time - alg_start_time)
+
                 print("    Checkpoint at {}:".format(index))
 
                 val = self.generate_average_discounted_return(trial_times, steps_per_trial)
@@ -313,19 +335,22 @@ class CsmAgent(object):
                 check_point_values.append(val)
 
                 test_end_time = time.clock()
-                check_point_durations.append((test_end_time - test_start_time))
 
             if self.pos in self.maze.treasures:
                 print("{} is goal. New round".format(self.pos))
                 self.new_round()
 
+            # if self.pos in self.maze.snake_pits:
+            #     print("{} is snake pit. New round".format(self.pos))
+            #     self.new_round()
+
             end_time = time.clock()
             iteration_durations.append((end_time - test_end_time) + (test_start_time - start_time))
 
-        return check_point_values, check_point_durations, iteration_durations
+        return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.usm.clear_test_instance()
         self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
         self.reward = 0
@@ -335,7 +360,7 @@ class CsmAgent(object):
 
         get_treasure = False
         for i in range(iters):
-            temperature = 2 / (1 + i)
+            temperature = 1 / (1 + i)
             p = 1
             action = self.select_by_boltzmann_sampling(temperature, learning=False, force_ahead=p)
             while True:

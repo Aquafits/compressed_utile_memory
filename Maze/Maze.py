@@ -6,17 +6,19 @@ class Maze:
                  walls,
                  treasures,
                  snake_pits,
+                 start_positions,
                  y_size,
                  x_size,
                  observations,
                  actions,
-                 snake_penalty=-40,
-                 treasure_reward=100,
+                 snake_penalty=-4,
+                 treasure_reward=32,
                  default_reward=0):
         # 墙壁、宝藏（奖励点）、蛇坑（惩罚点）和迷宫大小
         self.walls = walls
         self.treasures = treasures
         self.snake_pits = snake_pits
+        self.start_positions = start_positions
         self.y_size = y_size
         self.x_size = x_size
 

@@ -6,6 +6,7 @@ walls = [
 
 treasures = [[0, 2]]
 snake_pits = [[0, 0], [0, 4]]
+start_positions = [[1, 0]]
 
 observations = [
     '____',  # 0
@@ -32,4 +33,4 @@ actions = [
     'south'
 ]
 
-tiger = Maze(walls, treasures, snake_pits, 2, 5, observations, actions, default_reward=-0.1)
+tiger = Maze(walls, treasures, snake_pits, start_positions, 2, 5, observations, actions, default_reward=-0.1)

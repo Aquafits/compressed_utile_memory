@@ -16,7 +16,7 @@ class UsmAgent(object):
         self.maze = maze
         self.name = 'USM'
 
-        self.pos = self.get_random_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
 
@@ -32,7 +32,7 @@ class UsmAgent(object):
 
     def new_round(self):
 
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.reward = 0
 
         self.cached_action = ''
@@ -41,6 +41,13 @@ class UsmAgent(object):
         self.cached_reward = 0
 
         self.usm.new_round(self.observe())
+
+    def get_start_pos(self, provided=True):
+        if provided:
+            i = np.random.choice([_ for _ in range(len(self.maze.start_positions))])
+            return self.maze.start_positions[i]
+        else:
+            return self.get_random_pos()
 
     def get_random_pos(self):
         [y, x] = self.maze.walls[0]
@@ -118,7 +125,7 @@ class UsmAgent(object):
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
 
-                if i % 16 == 0:
+                if i % 12 == 0:
                     do_check = True
 
                 if self.cached_state is None:
@@ -190,7 +197,9 @@ class UsmAgent(object):
             check_points = []
         check_point_values = []
         iteration_durations = []
-        check_point_durations = []
+        check_point_reach_time = []
+
+        alg_start_time = time.clock()
 
         self.new_round()
 
@@ -217,23 +226,29 @@ class UsmAgent(object):
 
             if i in check_points:
                 test_start_time = time.clock()
+                check_point_reach_time.append(test_start_time - alg_start_time)
+
                 print("    Checkpoint at {}:".format(i))
+
                 val = self.generate_average_discounted_return(trial_times, steps_per_trial)
                 check_point_values.append(val)
                 test_end_time = time.clock()
-                check_point_durations.append((test_end_time - test_start_time))
 
             if self.pos in self.maze.treasures:
                 print("{} is goal. New round".format(self.pos))
                 self.new_round()
 
+            # if self.pos in self.maze.snake_pits:
+            #     print("{} is snake pit. New round".format(self.pos))
+            #     self.new_round()
+
             end_time = time.clock()
             iteration_durations.append((end_time - test_end_time) + (test_start_time - start_time))
 
-        return check_point_values, check_point_durations, iteration_durations
+        return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_random_pos()
+        self.pos = self.get_start_pos()
         self.usm.clear_test_instance()
         self.usm.add_test_instance(Instance(None, "", self.observe(), 0))
         self.reward = 0

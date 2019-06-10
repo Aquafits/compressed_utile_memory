@@ -8,6 +8,7 @@ walls = [
 
 treasures = [[3, 5]]
 snake_pits = []
+start_positions = [[0, 0]]
 
 observations = [
     '____',  # 0
@@ -34,4 +35,5 @@ actions = [
     'south'
 ]
 
-hallway_3 = Maze(walls, treasures, snake_pits, 7, 11, observations, actions, default_reward=-1, treasure_reward=32)
+hallway_3 = Maze(walls, treasures, snake_pits, start_positions, 7, 11, observations, actions, default_reward=-1,
+                 treasure_reward=32)

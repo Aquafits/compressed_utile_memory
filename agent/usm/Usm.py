@@ -302,8 +302,8 @@ class Usm:
     # 论文中使用ks校验分裂状态
     def check_fringe(self, current_state: TreeNode) -> TreeNode:
         # 这个父节点要有一定数量的实例才比较好
-        # if len(current_state.instances) < 16:
-        #     return current_state
+        if len(current_state.instances) < 1:
+            return current_state
 
         # 先生成父节点包含的实例集合的预期收益集合，封装成一维的ndarray
         parent_qs = np.array([self.get_expected_discounted_reward_of_instance(_) for _ in current_state.instances])
@@ -311,14 +311,14 @@ class Usm:
         # 对于每一个子节点，生成子节点包含的实例集合的预期收益集合，封装成一维的ndarray，与父节点的分布进行ks校验
         for child in current_state.children:
             # 这个子节点要有一定数量的实例才比较好
-            # if len(child.instances) > 0.25 * len(current_state.instances):
-            child_qs = np.array([self.get_expected_discounted_reward_of_instance(_) for _ in child.instances])
-            d, p_value = stats.ks_2samp(parent_qs, child_qs)
+            if len(child.instances) > 0:
+                child_qs = np.array([self.get_expected_discounted_reward_of_instance(_) for _ in child.instances])
+                d, p_value = stats.ks_2samp(parent_qs, child_qs)
 
-            # 当p_value太低，推翻他们两个来自同一个分布的零假设，这个节点需要分裂
-            if p_value < 0.1:
-                self.split_state(current_state)
-                break
+                # 当p_value太低，推翻他们两个来自同一个分布的零假设，这个节点需要分裂
+                if p_value < 0.1:
+                    self.split_state(current_state)
+                    break
 
         # 更新现在的agent状态，并返回
         return self.get_state(self.get_last_instance())
