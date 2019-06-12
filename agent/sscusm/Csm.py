@@ -136,6 +136,7 @@ class Csm:
         self.__leaves: List[TreeNode] = []
         self.__gamma: float = gamma
         self.__longest_edge: int = 8
+        self.__min_instances: int = 64
 
         # observations 和 actions 是为了构建usm树
         self.__actions: List[str] = actions
@@ -189,6 +190,14 @@ class Csm:
     @longest_edge.setter
     def longest_edge(self, value):
         self.__longest_edge = value
+
+    @property
+    def min_instances(self):
+        return self.__min_instances
+
+    @min_instances.setter
+    def min_instances(self, value):
+        self.__min_instances = value
 
     def new_round(self, initial_observation, cached_check_point):
         self.clear_instance()
@@ -289,11 +298,13 @@ class Csm:
 
     # 论文中的 Q(s,a) = R(s,a) + \gamma * Pr(s'|s,a) * U(s')
     def update_q_mat(self):
-        for _ in range(1):
+        g = self.gamma
+        while g > 0.5:
             for leaf in self.__leaves:
                 for action in self.actions:
                     updated_q = self.get_r(leaf, action) + self.gamma * self.get_pr_u(leaf, action)
                     self.q_mat.set_q_by_leaf_and_action(leaf, action, updated_q)
+            g = g ** 2
 
     # 论文中的 a_{t+1} = \argmax_{a \in A} Q(L(T_t), a)
     def get_action_with_max_q(self, leaf: TreeNode):
@@ -325,7 +336,7 @@ class Csm:
             return current_state
 
         # 这个父节点要有一定数量的实例才比较好
-        if len(current_state.instances) < 12:
+        if len(current_state.instances) < self.min_instances:
             return current_state
 
         # 先生成父节点包含的实例集合的预期收益集合，封装成一维的ndarray

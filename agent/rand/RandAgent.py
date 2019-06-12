@@ -8,15 +8,16 @@ from maze.Maze import Maze
 
 
 class RandAgent(object):
-    def __init__(self, maze: Maze, bumped_penalty=0):
+    def __init__(self, maze: Maze, fixed_start: bool, bumped_penalty=0):
 
         self.gamma = 0.8
         self.maze = maze
         self.name = 'Rand'
 
-        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos(fixed_start)  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
+        self.fixed_start = fixed_start
 
         self.observations = maze.observations
         self.actions = maze.actions
@@ -24,7 +25,7 @@ class RandAgent(object):
         self.cached_action = None
 
     def new_round(self):
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.reward = 0
 
     def get_start_pos(self, provided=True):
@@ -155,7 +156,7 @@ class RandAgent(object):
         return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.reward = 0
         print("starts at {},".format(self.pos), end=' ')
 

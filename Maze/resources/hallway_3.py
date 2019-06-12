@@ -36,4 +36,4 @@ actions = [
 ]
 
 hallway_3 = Maze(walls, treasures, snake_pits, start_positions, 7, 11, observations, actions, default_reward=-1,
-                 treasure_reward=32)
+                 treasure_reward=128)

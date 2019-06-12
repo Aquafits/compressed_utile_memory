@@ -11,14 +11,15 @@ from maze.Maze import Maze
 
 
 class UsmAgent(object):
-    def __init__(self, maze: Maze, bumped_penalty=0):
+    def __init__(self, maze: Maze, fixed_start: bool, bumped_penalty=0):
 
         self.maze = maze
         self.name = 'USM'
 
-        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos(fixed_start)  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
+        self.fixed_start = fixed_start
 
         self.observations = maze.observations
         self.actions = maze.actions
@@ -28,11 +29,11 @@ class UsmAgent(object):
         self.cached_state = None
         self.cached_reward = 0
 
-        self.usm: Usm = Usm(maze.observations, maze.actions, gamma=0.8)
+        self.usm: Usm = Usm(maze.observations, maze.actions, gamma=0.9)
 
     def new_round(self):
 
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.reward = 0
 
         self.cached_action = ''
@@ -125,7 +126,7 @@ class UsmAgent(object):
                 if self.cached_state is not new_state:
                     self.cached_state = new_state
 
-                if i % 12 == 0:
+                if i % 18 == 0:
                     do_check = True
 
                 if self.cached_state is None:
@@ -248,7 +249,7 @@ class UsmAgent(object):
         return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.usm.clear_test_instance()
         self.usm.add_test_instance(Instance(None, "", self.observe(), 0))
         self.reward = 0

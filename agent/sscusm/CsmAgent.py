@@ -11,14 +11,15 @@ from maze.Maze import Maze
 
 
 class CsmAgent(object):
-    def __init__(self, maze: Maze, bumped_penalty=0):
+    def __init__(self, maze: Maze, fixed_start: bool, bumped_penalty=0):
 
         self.maze = maze
         self.name = 'CSM'
 
-        self.pos = self.get_start_pos()  # 执行这一句之前一定要保证maze正确加载
+        self.pos = self.get_start_pos(fixed_start)  # 执行这一句之前一定要保证maze正确加载
         self.reward = 0
         self.bumped_penalty = bumped_penalty
+        self.fixed_start = fixed_start
 
         self.observations = maze.observations
         self.actions = maze.actions
@@ -29,12 +30,12 @@ class CsmAgent(object):
         self.cached_reward = 0
         self.cached_check_point = 0
 
-        self.usm: Csm = Csm(maze.observations, maze.actions, gamma=0.8)
+        self.usm: Csm = Csm(maze.observations, maze.actions, gamma=0.9)
         self.usm.longest_edge = self.blind_exploration()
 
     def new_round(self):
 
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.reward = 0
 
         self.cached_action = ''
@@ -59,11 +60,12 @@ class CsmAgent(object):
 
         return [y, x]
 
-    def blind_exploration(self, iters=256):
+    def blind_exploration(self, iters=2048):
         self.usm.clear_test_instance()
         self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
 
         goal_count = 0
+        break_i = 0
         for i in range(iters):
             e = 1.0
             p = 1
@@ -79,6 +81,20 @@ class CsmAgent(object):
             if self.pos in self.maze.treasures:
                 self.pos = self.get_random_pos()
                 goal_count += 1
+                if goal_count >= 2:
+                    break_i = i
+                    break
+
+        if break_i < 256:
+            self.usm.min_instances = 48
+        elif break_i < 512:
+            self.usm.min_instances = 32
+        elif break_i < 1024:
+            self.usm.min_instances = 16
+        elif break_i < 2048:
+            self.usm.min_instances = 12
+        elif break_i == 2048:
+            self.usm.min_instances = 9
 
         self.cached_action = ''
         self.cached_observation = ''
@@ -350,7 +366,7 @@ class CsmAgent(object):
         return check_point_values, check_point_reach_time, iteration_durations
 
     def test_iterate(self, iters):
-        self.pos = self.get_start_pos()
+        self.pos = self.get_start_pos(self.fixed_start)
         self.usm.clear_test_instance()
         self.usm.add_test_instance(Instance(None, "", self.observe(), 0, cached_check_point=-1))
         self.reward = 0
