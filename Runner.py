@@ -18,7 +18,7 @@ from maze.resources.tiger import tiger
 
 
 class Runner:
-    def __init__(self, maze: Maze, maze_name: str, iters=1280, trial_times=128, steps_per_trial=48):
+    def __init__(self, maze: Maze, maze_name: str, iters=1536, trial_times=128, steps_per_trial=48):
         self.agent_names = ['USM', 'CSM', 'Rand']
         # self.agent_names = ['CSM']
         self.iters = iters
@@ -71,6 +71,7 @@ class Runner:
 
             results.append(result)
 
+        line_styles_dict = {'CSM': '-', 'USM': '--', 'Rand': ':'}
         plt.figure(figsize=(6, 30))
         ax = plt.subplot(5, 1, 1)
         ax.tick_params(labelsize=14)
@@ -78,7 +79,8 @@ class Runner:
         ax.set_xlabel('sec', fontsize=18)
         ax.set_ylabel('value', fontsize=18)
         for result in results:
-            plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'])
+            plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'], color='k',
+                     linestyle=line_styles_dict[result['name']])
         plt.legend(fontsize=16)
 
         ax = plt.subplot(5, 1, 2)
@@ -101,12 +103,13 @@ class Runner:
         for result in results:
             if result['name'] == 'CSM':
                 plt.plot(result['check_point_reach_time'][:csm_id + 1], result['check_point_values'][:csm_id + 1],
-                         label=result['name'])
+                         label=result['name'], color='k', linestyle=line_styles_dict[result['name']])
             elif result['name'] == 'USM':
-                plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'])
+                plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'],
+                         color='k', linestyle=line_styles_dict[result['name']])
             else:
                 mean_rand = float(np.mean(result['check_point_values']))
-                plt.axhline(mean_rand, label='Random Avg', color='g')
+                plt.axhline(mean_rand, label='avg(Rand)', color='k', linestyle=line_styles_dict[result['name']])
         plt.legend(fontsize=16)
 
         ax = plt.subplot(5, 1, 3)
@@ -115,7 +118,8 @@ class Runner:
         ax.set_xlabel('step', fontsize=18)
         ax.set_ylabel('value', fontsize=18)
         for result in results:
-            plt.plot(check_points, result['check_point_values'], label=result['name'])
+            plt.plot(check_points, result['check_point_values'], label=result['name'], color='k',
+                     linestyle=line_styles_dict[result['name']])
         plt.legend(fontsize=16)
 
         ax = plt.subplot(5, 1, 4)
@@ -124,7 +128,8 @@ class Runner:
         ax.set_xlabel('step', fontsize=18)
         ax.set_ylabel('sec', fontsize=18)
         for result in results:
-            plt.plot(check_points, result['check_point_reach_time'], label=result['name'])
+            plt.plot(check_points, result['check_point_reach_time'], label=result['name'], color='k',
+                     linestyle=line_styles_dict[result['name']])
         plt.legend(fontsize=16)
 
         ax = plt.subplot(5, 1, 5)
@@ -133,7 +138,8 @@ class Runner:
         ax.set_xlabel('step', fontsize=18)
         ax.set_ylabel('sec', fontsize=18)
         for result in results:
-            plt.plot(np.arange(self.iters), result['iteration_durations'], label=result['name'])
+            plt.plot(np.arange(self.iters), result['iteration_durations'], label=result['name'], color='k',
+                     linestyle=line_styles_dict[result['name']])
         plt.legend(fontsize=16)
 
         plt.show()
@@ -151,14 +157,17 @@ class Runner:
         df.to_csv(self.maze_name + '.csv', index=False, sep=',')
 
 
-# hallway_runner = Runner(hallway, 'Hallway')
-# hallway_runner.run()
+tiger_runner = Runner(tiger, 'Tiger')
+tiger_runner.run()
+del tiger_runner
+
+hallway_runner = Runner(hallway, 'Hallway')
+hallway_runner.run()
+del hallway_runner
 
 hallway_2_runner = Runner(hallway_2, 'McCallum')
 hallway_2_runner.run()
+del hallway_2_runner
 
 # prim_runner = Runner(prim_maze, 'prim')
 # prim_runner.run()
-
-# tiger_runner = Runner(tiger, 'Tiger')
-# tiger_runner.run()
