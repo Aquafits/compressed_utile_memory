@@ -26,7 +26,7 @@ class Runner:
         self.steps_per_trial = steps_per_trial
         self.maze = maze
         self.maze_name = maze_name
-        self.fixed_start = False
+        self.fixed_start = True
 
     def run(self):
         check_points = []
@@ -105,7 +105,7 @@ class Runner:
             elif result['name'] == 'USM':
                 plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'])
             else:
-                mean_rand = float(np.mean(result['check_point_reach_time']))
+                mean_rand = float(np.mean(result['check_point_values']))
                 plt.axhline(mean_rand, label='Random Avg', color='g')
         plt.legend(fontsize=16)
 
@@ -154,11 +154,11 @@ class Runner:
 # hallway_runner = Runner(hallway, 'Hallway')
 # hallway_runner.run()
 
-# hallway_2_runner = Runner(hallway_2, 'McCallum')
-# hallway_2_runner.run()
+hallway_2_runner = Runner(hallway_2, 'McCallum')
+hallway_2_runner.run()
 
-prim_runner = Runner(prim_maze)
-prim_runner.run()
+# prim_runner = Runner(prim_maze, 'prim')
+# prim_runner.run()
 
 # tiger_runner = Runner(tiger, 'Tiger')
 # tiger_runner.run()

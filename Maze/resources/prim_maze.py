@@ -185,7 +185,8 @@ def generate_prim_maze(map_y_size=None, map_x_size=None, crowding_index=None):
 
     start_positions = [[y, x]]
 
-    return Maze(walls, treasures, snake_pits, start_positions, map_y_size, map_x_size, observations, actions, default_reward=-0.1,
+    return Maze(walls, treasures, snake_pits, start_positions, map_y_size, map_x_size, observations, actions,
+                default_reward=-0.1,
                 treasure_reward=96)
 
 
