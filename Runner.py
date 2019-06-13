@@ -18,7 +18,7 @@ from maze.resources.tiger import tiger
 
 
 class Runner:
-    def __init__(self, maze: Maze, maze_name: str, iters=1536, trial_times=128, steps_per_trial=48):
+    def __init__(self, maze: Maze, maze_name: str, iters=2048, trial_times=128, steps_per_trial=48):
         self.agent_names = ['USM', 'CSM', 'Rand']
         # self.agent_names = ['CSM']
         self.iters = iters
@@ -72,22 +72,22 @@ class Runner:
             results.append(result)
 
         line_styles_dict = {'CSM': '-', 'USM': '--', 'Rand': ':'}
-        plt.figure(figsize=(6, 30))
-        ax = plt.subplot(5, 1, 1)
-        ax.tick_params(labelsize=14)
-        ax.set_title("Average reward through time", fontsize=20)
-        ax.set_xlabel('sec', fontsize=18)
-        ax.set_ylabel('value', fontsize=18)
-        for result in results:
-            plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'], color='k',
-                     linestyle=line_styles_dict[result['name']])
-        plt.legend(fontsize=16)
+        plt.figure(figsize=(6, 6))
+        # ax = plt.subplot(5, 1, 1)
+        # ax.tick_params(labelsize=16)
+        # ax.set_title("Average reward through time", fontsize=22)
+        # ax.set_xlabel('time', fontsize=20)
+        # ax.set_ylabel('ADR', fontsize=20)
+        # for result in results:
+        #     plt.plot(result['check_point_reach_time'], result['check_point_values'], label=result['name'], color='k',
+        #              linestyle=line_styles_dict[result['name']])
+        # plt.legend(fontsize=18)
 
-        ax = plt.subplot(5, 1, 2)
-        ax.tick_params(labelsize=14)
-        ax.set_title("Average reward through time", fontsize=20)
-        ax.set_xlabel('sec', fontsize=18)
-        ax.set_ylabel('value', fontsize=18)
+        ax = plt.subplot(1, 1, 1)
+        ax.tick_params(labelsize=16)
+        ax.set_title("Average reward through time", fontsize=22)
+        ax.set_xlabel('time', fontsize=20)
+        ax.set_ylabel('ADR', fontsize=20)
         usm_result = None
         csm_result = None
         for result in results:
@@ -109,38 +109,38 @@ class Runner:
                          color='k', linestyle=line_styles_dict[result['name']])
             else:
                 mean_rand = float(np.mean(result['check_point_values']))
-                plt.axhline(mean_rand, label='avg(Rand)', color='k', linestyle=line_styles_dict[result['name']])
-        plt.legend(fontsize=16)
+                plt.axhline(mean_rand, label='Rand Avg', color='k', linestyle=line_styles_dict[result['name']])
+        plt.legend(fontsize=18)
 
-        ax = plt.subplot(5, 1, 3)
-        ax.tick_params(labelsize=14)
-        ax.set_title("Value at check point", fontsize=20)
-        ax.set_xlabel('step', fontsize=18)
-        ax.set_ylabel('value', fontsize=18)
-        for result in results:
-            plt.plot(check_points, result['check_point_values'], label=result['name'], color='k',
-                     linestyle=line_styles_dict[result['name']])
-        plt.legend(fontsize=16)
-
-        ax = plt.subplot(5, 1, 4)
-        ax.tick_params(labelsize=14)
-        ax.set_title('Time to reach check point', fontsize=20)
-        ax.set_xlabel('step', fontsize=18)
-        ax.set_ylabel('sec', fontsize=18)
-        for result in results:
-            plt.plot(check_points, result['check_point_reach_time'], label=result['name'], color='k',
-                     linestyle=line_styles_dict[result['name']])
-        plt.legend(fontsize=16)
-
-        ax = plt.subplot(5, 1, 5)
-        ax.tick_params(labelsize=14)
-        ax.set_title('Iteration durations', fontsize=20)
-        ax.set_xlabel('step', fontsize=18)
-        ax.set_ylabel('sec', fontsize=18)
-        for result in results:
-            plt.plot(np.arange(self.iters), result['iteration_durations'], label=result['name'], color='k',
-                     linestyle=line_styles_dict[result['name']])
-        plt.legend(fontsize=16)
+        # ax = plt.subplot(5, 1, 3)
+        # ax.tick_params(labelsize=16)
+        # ax.set_title("Value at check point", fontsize=22)
+        # ax.set_xlabel('step', fontsize=20)
+        # ax.set_ylabel('value', fontsize=20)
+        # for result in results:
+        #     plt.plot(check_points, result['check_point_values'], label=result['name'], color='k',
+        #              linestyle=line_styles_dict[result['name']])
+        # plt.legend(fontsize=18)
+        #
+        # ax = plt.subplot(5, 1, 4)
+        # ax.tick_params(labelsize=16)
+        # ax.set_title('Time to reach check point', fontsize=22)
+        # ax.set_xlabel('step', fontsize=20)
+        # ax.set_ylabel('sec', fontsize=20)
+        # for result in results:
+        #     plt.plot(check_points, result['check_point_reach_time'], label=result['name'], color='k',
+        #              linestyle=line_styles_dict[result['name']])
+        # plt.legend(fontsize=18)
+        #
+        # ax = plt.subplot(5, 1, 5)
+        # ax.tick_params(labelsize=16)
+        # ax.set_title('Iteration durations', fontsize=22)
+        # ax.set_xlabel('step', fontsize=20)
+        # ax.set_ylabel('sec', fontsize=20)
+        # for result in results:
+        #     plt.plot(np.arange(self.iters), result['iteration_durations'], label=result['name'], color='k',
+        #              linestyle=line_styles_dict[result['name']])
+        # plt.legend(fontsize=18)
 
         plt.show()
 
@@ -157,13 +157,13 @@ class Runner:
         df.to_csv(self.maze_name + '.csv', index=False, sep=',')
 
 
-tiger_runner = Runner(tiger, 'Tiger')
-tiger_runner.run()
-del tiger_runner
-
-hallway_runner = Runner(hallway, 'Hallway')
-hallway_runner.run()
-del hallway_runner
+# tiger_runner = Runner(tiger, 'Tiger')
+# tiger_runner.run()
+# del tiger_runner
+#
+# hallway_runner = Runner(hallway, 'Hallway')
+# hallway_runner.run()
+# del hallway_runner
 
 hallway_2_runner = Runner(hallway_2, 'McCallum')
 hallway_2_runner.run()
