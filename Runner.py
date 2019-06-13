@@ -18,7 +18,7 @@ from maze.resources.tiger import tiger
 
 
 class Runner:
-    def __init__(self, maze: Maze, maze_name: str, iters=2048, trial_times=128, steps_per_trial=48):
+    def __init__(self, maze: Maze, maze_name: str, iters=1536, trial_times=128, steps_per_trial=48):
         self.agent_names = ['USM', 'CSM', 'Rand']
         # self.agent_names = ['CSM']
         self.iters = iters
@@ -72,7 +72,7 @@ class Runner:
             results.append(result)
 
         line_styles_dict = {'CSM': '-', 'USM': '--', 'Rand': ':'}
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(10, 6))
         # ax = plt.subplot(5, 1, 1)
         # ax.tick_params(labelsize=16)
         # ax.set_title("Average reward through time", fontsize=22)
@@ -85,7 +85,7 @@ class Runner:
 
         ax = plt.subplot(1, 1, 1)
         ax.tick_params(labelsize=16)
-        ax.set_title("Average reward through time", fontsize=22)
+        # ax.set_title("Average reward through time", fontsize=22)
         ax.set_xlabel('time', fontsize=20)
         ax.set_ylabel('ADR', fontsize=20)
         usm_result = None
